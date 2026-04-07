@@ -1,0 +1,15 @@
+.env
+/client/*.json
+/client/*.txt
+/client/.env.server
+/.gradle/
+/.idea/
+/.kotlin/
+/local.properties
+/app/build/
+/build/
+/.cxx/
+/.gradle.kts-bak
+*.iml
+*.log
+*.apk

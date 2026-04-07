@@ -1,0 +1,26 @@
+# Starter domains for whitelist bypass.
+# Replace or extend this list later if you want stricter split routing.
+google.com
+www.google.com
+gstatic.com
+fonts.gstatic.com
+github.com
+www.github.com
+api.github.com
+raw.githubusercontent.com
+youtube.com
+www.youtube.com
+m.youtube.com
+youtu.be
+youtubei.googleapis.com
+ytimg.com
+i.ytimg.com
+googlevideo.com
+telegram.org
+www.telegram.org
+t.me
+telegram.me
+web.telegram.org
+desktop.telegram.org
+api.telegram.org
+core.telegram.org

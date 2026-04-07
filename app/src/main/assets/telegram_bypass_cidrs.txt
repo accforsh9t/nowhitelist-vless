@@ -1,0 +1,2 @@
+# Telegram DC IPs and ports may change frequently.
+# Keep this list updated from a current Telegram config source when available.
