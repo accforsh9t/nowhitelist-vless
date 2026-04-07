@@ -1,2 +1,9 @@
-# Telegram DC IPs and ports may change frequently.
-# Keep this list updated from a current Telegram config source when available.
+# Seed Telegram IPv4 CIDRs used for direct bypass routing.
+# The app auto-refreshes this file from the repository raw URL when no manual override is set.
+149.154.160.0/20
+91.108.4.0/22
+91.108.8.0/22
+91.108.12.0/22
+91.108.16.0/22
+91.108.20.0/22
+91.108.56.0/22

@@ -34,7 +34,10 @@ class WhitelistBypassRepository(context: Context) {
     }
 
     fun getTelegramIpCidrs(): List<String> {
-        val cached = parseCidrs(preferences.getString(KEY_TELEGRAM_IP_CIDRS, null).orEmpty())
+        val manual = getManualTelegramIpCidrs()
+        if (manual.isNotEmpty()) return manual
+
+        val cached = getCachedTelegramIpCidrs()
         return if (cached.isNotEmpty()) cached else getBundledTelegramIpCidrs()
     }
 
@@ -44,8 +47,46 @@ class WhitelistBypassRepository(context: Context) {
 
     fun saveTelegramIpCidrsText(raw: String): Int {
         val parsed = parseCidrs(raw)
-        preferences.edit().putString(KEY_TELEGRAM_IP_CIDRS, parsed.joinToString("\n")).apply()
+        if (parsed.isEmpty()) {
+            preferences.edit().remove(KEY_TELEGRAM_IP_CIDRS_OVERRIDE).apply()
+            return 0
+        }
+        preferences.edit().putString(KEY_TELEGRAM_IP_CIDRS_OVERRIDE, parsed.joinToString("\n")).apply()
         return parsed.size
+    }
+
+    suspend fun refreshTelegramIpCidrs(forceRefresh: Boolean = false): List<String> = withContext(Dispatchers.IO) {
+        val manual = getManualTelegramIpCidrs()
+        if (manual.isNotEmpty()) {
+            return@withContext manual
+        }
+
+        val cached = getCachedTelegramIpCidrs()
+        val bundled = getBundledTelegramIpCidrs()
+        val fallback = if (cached.isNotEmpty()) cached else bundled
+        val lastRefreshAtMs = preferences.getLong(KEY_TELEGRAM_IP_CIDRS_LAST_REFRESH_AT_MS, 0L)
+        val refreshDue = forceRefresh ||
+            fallback.isEmpty() ||
+            System.currentTimeMillis() - lastRefreshAtMs >= TELEGRAM_CIDRS_REFRESH_INTERVAL_MS
+
+        if (!refreshDue) {
+            return@withContext fallback
+        }
+
+        runCatching {
+            val parsed = parseCidrs(fetchText(DEFAULT_TELEGRAM_CIDRS_URL))
+            if (parsed.isNotEmpty()) {
+                preferences.edit()
+                    .putString(KEY_TELEGRAM_IP_CIDRS_CACHE, parsed.joinToString("\n"))
+                    .putLong(KEY_TELEGRAM_IP_CIDRS_LAST_REFRESH_AT_MS, System.currentTimeMillis())
+                    .apply()
+                parsed
+            } else {
+                fallback
+            }
+        }.getOrElse {
+            fallback
+        }
     }
 
     suspend fun getDomains(forceRefresh: Boolean = false): List<String> = withContext(Dispatchers.IO) {
@@ -58,25 +99,24 @@ class WhitelistBypassRepository(context: Context) {
         }
 
         runCatching {
-            val connection = (URL(DEFAULT_WHITELIST_URL).openConnection() as HttpURLConnection).apply {
-                connectTimeout = CONNECT_TIMEOUT_MS
-                readTimeout = READ_TIMEOUT_MS
-                requestMethod = "GET"
-                instanceFollowRedirects = true
-            }
-
-            connection.inputStream.bufferedReader().use { reader ->
-                val parsed = parseDomains(reader.readText())
-                if (parsed.isNotEmpty()) {
-                    preferences.edit().putString(KEY_DOMAINS, parsed.joinToString("\n")).apply()
-                    parsed
-                } else {
-                    fallback
-                }
+            val parsed = parseDomains(fetchText(DEFAULT_WHITELIST_URL))
+            if (parsed.isNotEmpty()) {
+                preferences.edit().putString(KEY_DOMAINS, parsed.joinToString("\n")).apply()
+                parsed
+            } else {
+                fallback
             }
         }.getOrElse {
             fallback
         }
+    }
+
+    private fun getManualTelegramIpCidrs(): List<String> {
+        return parseCidrs(preferences.getString(KEY_TELEGRAM_IP_CIDRS_OVERRIDE, null).orEmpty())
+    }
+
+    private fun getCachedTelegramIpCidrs(): List<String> {
+        return parseCidrs(preferences.getString(KEY_TELEGRAM_IP_CIDRS_CACHE, null).orEmpty())
     }
 
     private fun getBundledDomains(): List<String> {
@@ -93,6 +133,21 @@ class WhitelistBypassRepository(context: Context) {
                 parseCidrs(reader.readText())
             }
         }.getOrDefault(emptyList())
+    }
+
+    private fun fetchText(url: String): String {
+        val connection = (URL(url).openConnection() as HttpURLConnection).apply {
+            connectTimeout = CONNECT_TIMEOUT_MS
+            readTimeout = READ_TIMEOUT_MS
+            requestMethod = "GET"
+            instanceFollowRedirects = true
+        }
+
+        return try {
+            connection.inputStream.bufferedReader().use { reader -> reader.readText() }
+        } finally {
+            connection.disconnect()
+        }
     }
 
     private fun parseDomains(raw: String): List<String> {
@@ -117,9 +172,12 @@ class WhitelistBypassRepository(context: Context) {
     private companion object {
         private const val PREFS_NAME = "nowhitelist_vpn"
         private const val KEY_DOMAINS = "whitelist_bypass_domains"
-        private const val KEY_TELEGRAM_IP_CIDRS = "telegram_bypass_ip_cidrs"
+        private const val KEY_TELEGRAM_IP_CIDRS_OVERRIDE = "telegram_bypass_ip_cidrs_override"
+        private const val KEY_TELEGRAM_IP_CIDRS_CACHE = "telegram_bypass_ip_cidrs_cache"
+        private const val KEY_TELEGRAM_IP_CIDRS_LAST_REFRESH_AT_MS = "telegram_bypass_ip_cidrs_last_refresh_at_ms"
         private const val CONNECT_TIMEOUT_MS = 8000
         private const val READ_TIMEOUT_MS = 8000
+        private const val TELEGRAM_CIDRS_REFRESH_INTERVAL_MS = 6 * 60 * 60 * 1000L
         private const val BUNDLED_ASSET_NAME = "whitelist_bypass_domains.txt"
         private const val TELEGRAM_CIDRS_ASSET_NAME = "telegram_bypass_cidrs.txt"
         private val DOMAIN_REGEX = Regex("^([A-Za-z0-9.-]+\\.)+[A-Za-z]{2,}$")
@@ -127,5 +185,7 @@ class WhitelistBypassRepository(context: Context) {
 
         const val DEFAULT_WHITELIST_URL =
             "https://raw.githubusercontent.com/kulikov0/whitelist-bypass/main/whitelist.txt"
+        const val DEFAULT_TELEGRAM_CIDRS_URL =
+            "https://raw.githubusercontent.com/accforsh9t/nowhitelist-vless/main/app/src/main/assets/telegram_bypass_cidrs.txt"
     }
 }

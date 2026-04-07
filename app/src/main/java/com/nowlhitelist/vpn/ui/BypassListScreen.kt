@@ -68,7 +68,7 @@ fun BypassListScreen(
             modifier = Modifier.padding(top = 14.dp)
         )
         Text(
-            text = "Optional. Telegram says DC IP/port can change frequently, so keep this list current. Saved: $telegramIpCidrsCount",
+            text = "Optional manual override. If empty, the app uses the live Telegram CIDR list from the repo and refreshes it automatically. Saved: $telegramIpCidrsCount",
             style = MaterialTheme.typography.bodySmall,
             modifier = Modifier.padding(top = 4.dp)
         )

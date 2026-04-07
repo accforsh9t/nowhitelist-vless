@@ -254,7 +254,7 @@ class TunnelViewModel(
 
         monitorScope.launch {
             val whitelistDomains = if (enabled) whitelistBypassRepository.getDomains(forceRefresh = true) else emptyList()
-            val telegramIpCidrs = if (enabled) whitelistBypassRepository.getTelegramIpCidrs() else emptyList()
+            val telegramIpCidrs = if (enabled) whitelistBypassRepository.refreshTelegramIpCidrs(forceRefresh = true) else emptyList()
             val currentIdx = tunnels.indexOfFirst { it.id == id }
             if (currentIdx == -1) return@launch
 
@@ -308,8 +308,8 @@ class TunnelViewModel(
         bypassListDraft = whitelistBypassRepository.getEditableText()
         bypassDomainsCount = savedCount
         telegramIpCidrsDraft = whitelistBypassRepository.getTelegramIpCidrsText()
-        telegramIpCidrsCount = savedTelegramCidrs
-        lastMessage = "Whitelist list saved: $savedCount domains, $savedTelegramCidrs Telegram CIDRs"
+        telegramIpCidrsCount = whitelistBypassRepository.getTelegramIpCidrsCount()
+        lastMessage = "Whitelist list saved: $savedCount domains, ${telegramIpCidrsCount} Telegram CIDRs"
 
         tunnels.firstOrNull { it.enabled && it.whitelistBypassEnabled }?.let { activeTunnel ->
             log(activeTunnel.id, "Whitelist list updated ($savedCount domains, $savedTelegramCidrs Telegram CIDRs)")
@@ -682,9 +682,9 @@ class TunnelViewModel(
         return whitelistBypassRepository.getDomains(forceRefresh = false)
     }
 
-    private fun resolveTelegramIpCidrs(config: TunnelConfig): List<String> {
+    private suspend fun resolveTelegramIpCidrs(config: TunnelConfig): List<String> {
         if (!config.whitelistBypassEnabled) return emptyList()
-        return whitelistBypassRepository.getTelegramIpCidrs()
+        return whitelistBypassRepository.refreshTelegramIpCidrs(forceRefresh = false)
     }
 
     private fun connectTunnel(
